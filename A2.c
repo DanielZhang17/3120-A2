@@ -7,20 +7,19 @@
  * Notes:    I made the assumption that the max length of one line is 80
  *           and max number of tokens on one line is 20.
  *           Ideally i would dynamically adjust this.
- *           Also, little check for user input error is done, some error such as
- *           ';' on the first token would cause the program to behave strangely.
+ *           Also, little check for user input error is done, some error
+ *           would cause the program to behave strangely.
  *           Command used to compile: gcc A2.c -o A2.out
  */
 #include <stdio.h>
 #include <string.h>
 #include <wait.h>
-#include <zconf.h>
 #include <stdlib.h>
 
 //define some constants
 #define MAX_LENGTH 80 //assuming the max length of a line is 80 characters
 #define MAX_TOKEN 20 //assuming the max number of tokens on one line is 20
-#define DELIM " \t\r\n\a"
+#define DELIM " \t\r\n\a"//used to split the input into tokens
 
 //function declaration
 char **split_input(char * input);//splits input into tokens
@@ -48,6 +47,11 @@ int main()
         cmd1 = malloc(MAX_TOKEN * sizeof(char *));
         cmd2 = malloc(MAX_TOKEN * sizeof(char *));
         background = 0;
+        pid_t pid;
+        //“reap” any background jobs which have terminated
+        pid = waitpid(-1, NULL, WNOHANG);
+        if (pid != -1&&pid!=0)
+            printf("Process %d terminated\n", pid);
         printf("$ ");
         getline(&input,&line_buf_size,stdin);//reads one line from stdin
         //handles empty input, so that it does not cause segmentation fault
@@ -60,7 +64,6 @@ int main()
         else
         {
             //create a new process with fork()
-            pid_t pid;
             pid = fork();
             int index = isPipe(arg);
             int multi = isMulti(arg);
@@ -98,7 +101,7 @@ int main()
             else
             {
                     //parent process waits for the child to finish
-                    waitpid(pid, &status, WUNTRACED);
+                    waitpid(0, &status, 0);
             }
         }
         //release memory
@@ -157,14 +160,13 @@ int handleMulti(char **arg)
 {
     temp = malloc(MAX_TOKEN * sizeof(char *));
     int c =0;//a counter for the current command
-    int pid = 0;
     for (int i = 0; i <arguments; i++)
     {
         if (strcmp(arg[i],";")==0|strcmp(arg[i],"&")==0)
         {
             if (strcmp(arg[i],"&")==0)
                 background = 1;
-            pid = runCommand(temp);//executes the current command
+            runCommand(temp);//executes the current command
             c = 0;//reset counter
             free(temp);
             temp = malloc(MAX_TOKEN * sizeof(char *));//reinitialize array
@@ -173,10 +175,10 @@ int handleMulti(char **arg)
         temp[c] = arg[i];//stores each cmd in temp
         c++;
     }
-    pid = runCommand(temp);
+    runCommand(temp);//here the last command from the input is executed
     free(temp);//release memory
     background = 0;
-    return  pid;
+    return 0;
 }
 //this handles pipes
 //I tried to do this in main() but it is getting too messy
@@ -224,10 +226,10 @@ int runCommand(char **cmd)
     }
     else
     {
-        //“reap” any background jobs which have terminated
-        pid = waitpid(-1,NULL,WNOHANG);
-        if (pid!=-1)
-            printf("Process %d terminated\n",pid);
+        if (background==1)
+            waitpid(-1,NULL,WNOHANG);
+        else
+            waitpid(pid, &status, 0);
     }
     return 0;
 }
