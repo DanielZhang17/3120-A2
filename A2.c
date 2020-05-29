@@ -32,6 +32,7 @@ int runCommand(char **cmd);//runs one single command used in handleMulti
 //global variables
 int status;//stores the status of the child program
 int arguments;//stores the number of tokens in the input
+int background; //flags if to run in the background 1->false
 //used to store commands separated by pipe
 char **cmd1;
 char **cmd2;
@@ -46,6 +47,7 @@ int main()
         //initialize them here
         cmd1 = malloc(MAX_TOKEN * sizeof(char *));
         cmd2 = malloc(MAX_TOKEN * sizeof(char *));
+        background = 0;
         printf("$ ");
         getline(&input,&line_buf_size,stdin);//reads one line from stdin
         //handles empty input, so that it does not cause segmentation fault
@@ -84,7 +86,7 @@ int main()
                 }
                 else if (multi!=0) //multiple cmd present
                 {
-                    pid = handleMulti(arg);
+                    handleMulti(arg);
                 }
                 else
                 {
@@ -106,11 +108,8 @@ int main()
         free(cmd2);
         //reset global variables
         arguments = 0;
-        //“reap” any background jobs which have terminated
 
-        int pid = waitpid(0,NULL,WNOHANG);
-        if (pid!=-1)
-            printf("Process %d terminated\n",pid);
+
     }
     return EXIT_SUCCESS;
 }
@@ -148,7 +147,7 @@ int isMulti(char **arg)
 {
     for (int i = 0; i < arguments; i++)
     {
-        if (strcmp(arg[i],";")==0)
+        if (strcmp(arg[i],";")==0|strcmp(arg[i],"&")==0)
             return i;
     }
     return 0;
@@ -159,10 +158,12 @@ int handleMulti(char **arg)
     temp = malloc(MAX_TOKEN * sizeof(char *));
     int c =0;//a counter for the current command
     int pid = 0;
-    for (int i = 0; i < arguments; i++)
+    for (int i = 0; i <arguments; i++)
     {
-        if (strcmp(arg[i],";")==0)
+        if (strcmp(arg[i],";")==0|strcmp(arg[i],"&")==0)
         {
+            if (strcmp(arg[i],"&")==0)
+                background = 1;
             pid = runCommand(temp);//executes the current command
             c = 0;//reset counter
             free(temp);
@@ -172,7 +173,9 @@ int handleMulti(char **arg)
         temp[c] = arg[i];//stores each cmd in temp
         c++;
     }
+    pid = runCommand(temp);
     free(temp);//release memory
+    background = 0;
     return  pid;
 }
 //this handles pipes
@@ -221,8 +224,10 @@ int runCommand(char **cmd)
     }
     else
     {
-        //parent process waits for the child to finish
-        waitpid(pid,NULL,0);
+        //“reap” any background jobs which have terminated
+        pid = waitpid(-1,NULL,WNOHANG);
+        if (pid!=-1)
+            printf("Process %d terminated\n",pid);
     }
     return 0;
 }
