@@ -7,6 +7,8 @@
  * Notes:    I made the assumption that the max length of one line is 80
  *           and max number of tokens on one line is 20.
  *           Ideally i would dynamically adjust this.
+ *           Also, little check for user input error is done, some error such as
+ *           ';' on the first token would cause the program to behave strangely.
  *           Command used to compile: gcc A2.c -o A2.out
  */
 #include <stdio.h>
@@ -24,7 +26,7 @@
 char **split_input(char * input);//splits input into tokens
 int isPipe(char **arg);//checks if input is pipe and returns a index if it is
 int isMulti(char **arg);//checks if multiple commands are in the input
-void handleMulti(char **arg);//processes multiple commands on one line
+int handleMulti(char **arg);//processes multiple commands on one line
 void handlePipe(char **command1, char **command2);//handle pipes
 int runCommand(char **cmd);//runs one single command used in handleMulti
 //global variables
@@ -33,7 +35,7 @@ int arguments;//stores the number of tokens in the input
 //used to store commands separated by pipe
 char **cmd1;
 char **cmd2;
-
+char **temp;
 int main()
 {
     int quit = 1;
@@ -59,7 +61,10 @@ int main()
             pid_t pid;
             pid = fork();
             int index = isPipe(arg);
-            if (pid < 0) {
+            int multi = isMulti(arg);
+
+            if (pid < 0)
+            {
                 fprintf(stderr, "Unable to create process with fork()\n");
                 exit(EXIT_FAILURE);
             }
@@ -69,22 +74,29 @@ int main()
                 {
                     int c =0; //counter for cmd2
                     //puts the command after '|' into cmd2
-                    for (int i = index+1; i < arguments; i++) {
+                    for (int i = index+1; i < arguments; i++)
+                    {
                         cmd2[c] = arg[i];
                         printf("%s ",cmd2[c]);
                         c++;
                     }
                     handlePipe(cmd1,cmd2);
                 }
+                else if (multi!=0) //multiple cmd present
+                {
+                    pid = handleMulti(arg);
+                }
                 else
-                    execvp(arg[0],arg);
-                //print error msg if gets here
-                printf( "Something went wrong\n");
+                {
+                    execvp(arg[0], arg);
+                    //print error msg if gets here
+                    //printf( "Something went wrong\n");
+                }
             }
             else
             {
-                //parent process waits for the child to finish
-                waitpid(pid,&status,WUNTRACED);
+                    //parent process waits for the child to finish
+                    waitpid(pid, &status, WUNTRACED);
             }
         }
         //release memory
@@ -95,7 +107,8 @@ int main()
         //reset global variables
         arguments = 0;
         //“reap” any background jobs which have terminated
-        int pid = waitpid(-1,NULL,WNOHANG);
+
+        int pid = waitpid(0,NULL,WNOHANG);
         if (pid!=-1)
             printf("Process %d terminated\n",pid);
     }
@@ -121,7 +134,8 @@ char **split_input(char * input)
 //checks if input is a pipe and returns the index of '|' token
 int isPipe(char **arg)
 {
-    for (int i = 0; i < arguments; ++i) {
+    for (int i = 0; i < arguments; ++i)
+    {
         if (strcmp(arg[i],"|")==0)
             return i;
         //copy the content to cmd1
@@ -129,26 +143,37 @@ int isPipe(char **arg)
     }
     return 0;
 }
-//checks if multiple commands are on one line
+//checks if multiple commands exist and returns the index of the first ';'
 int isMulti(char **arg)
 {
-    for (int i = 0; i < arguments; ++i) {
+    for (int i = 0; i < arguments; i++)
+    {
         if (strcmp(arg[i],";")==0)
-            return 0;
+            return i;
     }
-    return 1;
+    return 0;
 }
 //handles multiple commands on one line
-void handleMulti(char **arg)
+int handleMulti(char **arg)
 {
-    char **temp = malloc(MAX_TOKEN * sizeof(char *));
-    int c =0;
-    for (int i = 0; i < arguments; ++i)
+    temp = malloc(MAX_TOKEN * sizeof(char *));
+    int c =0;//a counter for the current command
+    int pid = 0;
+    for (int i = 0; i < arguments; i++)
     {
-        temp[i] = arg[i];
-        if (arg[i])
+        if (strcmp(arg[i],";")==0)
+        {
+            pid = runCommand(temp);//executes the current command
+            c = 0;//reset counter
+            free(temp);
+            temp = malloc(MAX_TOKEN * sizeof(char *));//reinitialize array
+            i++;
+        }
+        temp[c] = arg[i];//stores each cmd in temp
+        c++;
     }
     free(temp);//release memory
+    return  pid;
 }
 //this handles pipes
 //I tried to do this in main() but it is getting too messy
@@ -182,6 +207,22 @@ void handlePipe(char **command1, char **command2)
 //executes the command cmd
 int runCommand(char **cmd)
 {
-
+    pid_t pid = fork();
+    if (pid < 0)
+    {
+        fprintf(stderr, "Unable to create process with fork()\n");
+        exit(EXIT_FAILURE);
+    }
+    else if (pid == 0) //child successfully created
+    {
+        execvp(cmd[0],cmd);
+        //print error msg if gets here
+        //printf( "Something went wrong\n");
+    }
+    else
+    {
+        //parent process waits for the child to finish
+        waitpid(pid,NULL,0);
+    }
     return 0;
 }
