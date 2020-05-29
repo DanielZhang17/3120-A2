@@ -31,6 +31,9 @@ int main()
         char *input = malloc(MAX_LENGTH * sizeof(char));//stores user input
         printf("$ ");
         getline(&input,&line_buf_size,stdin);//reads one line from stdin
+        //handles empty input, so that it does not cause segmentation fault
+        if (strcmp(input,"\n")==0|strcmp(input,"\n")==0)
+            continue;
         char **arg = split_input(input);
         //if the command is 'exit', exit the shell
         if (strcmp(arg[0], "exit")==0)
@@ -49,7 +52,7 @@ int main()
 
                 execvp(arg[0],arg);
                 //print error msg if gets here
-                fprintf(stderr, "Something went wrong\n");
+                printf( "Something went wrong\n");
             }
             else
             {
