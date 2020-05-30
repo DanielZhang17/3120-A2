@@ -35,7 +35,7 @@ int background; //flags if to run in the background 1->false
 //used to store commands separated by pipe
 char **cmd1;
 char **cmd2;
-char **temp;
+char **temp;//Store the current cmd if multiple commands exist
 int main()
 {
     int quit = 1;
@@ -46,13 +46,8 @@ int main()
         //initialize them here
         cmd1 = malloc(MAX_TOKEN * sizeof(char *));
         cmd2 = malloc(MAX_TOKEN * sizeof(char *));
-        background = 0;
         pid_t pid;
-        //“reap” any background jobs which have terminated
-        pid = waitpid(-1, NULL, WNOHANG);
-        if (pid != -1&&pid!=0)
-            printf("Process %d terminated\n", pid);
-        printf("$ ");
+        printf("$ ");//print the prompt
         getline(&input,&line_buf_size,stdin);//reads one line from stdin
         //handles empty input, so that it does not cause segmentation fault
         if (strcmp(input,"\n")==0)
@@ -227,9 +222,15 @@ int runCommand(char **cmd)
     else
     {
         if (background==1)
-            waitpid(-1,NULL,WNOHANG);
+        {
+            //“reap” any background jobs which have terminated
+            pid = waitpid(-1, NULL, WNOHANG);
+            if (pid != -1)
+                printf("Process %d terminated\n", pid);
+        }
         else
             waitpid(pid, &status, 0);
     }
+    background = 0; // reset
     return 0;
 }
