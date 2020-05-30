@@ -1,15 +1,10 @@
 /* File:     A2.c
  * Author:   Anran Zhang   B00747547
- * Date:     2020/05/25
- * Version:  1.1
+ * Date:     2020/05/29
+ * Version:  1.3
  *
  * Purpose:  This program is a simple C shell.
- * Notes:    I made the assumption that the max length of one line is 80
- *           and max number of tokens on one line is 20.
- *           Ideally i would dynamically adjust this.
- *           Also, little check for user input error is done, some error
- *           would cause the program to behave strangely.
- *           Command used to compile: gcc A2.c -o A2.out
+ * Notes:    PLEASE READ THE README.txt FIRST. Thank you.
  */
 #include <stdio.h>
 #include <string.h>
@@ -42,12 +37,16 @@ int main()
     size_t line_buf_size = MAX_LENGTH;
     while (quit)
     {
+        pid_t pid;
+        //reap background process
+        pid = waitpid(-1, NULL, WNOHANG);
+        if (pid != -1&&pid!=0)
+            printf("Process %d terminated\n", pid);
+        printf("$ ");//print the prompt
         char *input = malloc(MAX_LENGTH * sizeof(char));//stores user input
         //initialize them here
         cmd1 = malloc(MAX_TOKEN * sizeof(char *));
         cmd2 = malloc(MAX_TOKEN * sizeof(char *));
-        pid_t pid;
-        printf("$ ");//print the prompt
         getline(&input,&line_buf_size,stdin);//reads one line from stdin
         //handles empty input, so that it does not cause segmentation fault
         if (strcmp(input,"\n")==0)
@@ -95,8 +94,13 @@ int main()
             }
             else
             {
-                    //parent process waits for the child to finish
+                //parent process waits for the child to finish
+                if (multi==0)//if multi cmd, handle in run function, not here
                     waitpid(0, &status, 0);
+                else
+                {
+                    pid_t pid;
+                }
             }
         }
         //release memory
@@ -147,6 +151,8 @@ int isMulti(char **arg)
     {
         if (strcmp(arg[i],";")==0|strcmp(arg[i],"&")==0)
             return i;
+        else
+            continue;
     }
     return 0;
 }
@@ -221,12 +227,9 @@ int runCommand(char **cmd)
     }
     else
     {
-        if (background==1)
+        if (background==1)//use only when running background process
         {
-            //“reap” any background jobs which have terminated
-            pid = waitpid(-1, NULL, WNOHANG);
-            if (pid != -1)
-                printf("Process %d terminated\n", pid);
+           //not waiting for process to quit
         }
         else
             waitpid(pid, &status, 0);
