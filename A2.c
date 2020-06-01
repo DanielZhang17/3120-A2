@@ -1,7 +1,7 @@
 /* File:     A2.c
  * Author:   Anran Zhang   B00747547
- * Date:     2020/05/29
- * Version:  1.3
+ * Date:     2020/05/30
+ * Version:  1.4
  *
  * Purpose:  This program is a simple C shell.
  * Notes:    PLEASE READ THE README.txt FIRST. Thank you.
@@ -10,10 +10,11 @@
 #include <string.h>
 #include <wait.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 //define some constants
 #define MAX_LENGTH 80 //assuming the max length of a line is 80 characters
-#define MAX_TOKEN 20 //assuming the max number of tokens on one line is 20
+#define MAX_TOKEN 40 //assuming the max number of tokens on one line is 40
 #define DELIM " \t\r\n\a"//used to split the input into tokens
 
 //function declaration
@@ -25,6 +26,7 @@ void handlePipe(char **command1, char **command2);//handle pipes
 int runCommand(char **cmd);//runs one single command used in handleMulti
 //global variables
 int status;//stores the status of the child program
+int check;//flags if to check the status of the previous command
 int arguments;//stores the number of tokens in the input
 int background; //flags if to run in the background 1->false
 //used to store commands separated by pipe
@@ -43,6 +45,7 @@ int main()
         if (pid != -1&&pid!=0)
             printf("Process %d terminated\n", pid);
         printf("$ ");//print the prompt
+        fflush(stdout);//flash output
         char *input = malloc(MAX_LENGTH * sizeof(char));//stores user input
         //initialize them here
         cmd1 = malloc(MAX_TOKEN * sizeof(char *));
@@ -95,23 +98,20 @@ int main()
             else
             {
                 //parent process waits for the child to finish
-                if (multi==0)//if multi cmd, handle in run function, not here
-                    waitpid(0, &status, 0);
+                if (background==0)//if not background job do waitpid() here
+                    waitpid(pid, &status, WUNTRACED);
                 else
                 {
-                    pid_t pid;
+                    waitpid(-1, &status, WNOHANG);
                 }
             }
         }
         //release memory
         free(input);
         free(arg);
-        free(cmd1);
-        free(cmd2);
         //reset global variables
         arguments = 0;
-
-
+        check = 0;
     }
     return EXIT_SUCCESS;
 }
@@ -149,10 +149,9 @@ int isMulti(char **arg)
 {
     for (int i = 0; i < arguments; i++)
     {
-        if (strcmp(arg[i],";")==0|strcmp(arg[i],"&")==0)
+        if (strcmp(arg[i],";")==0||strcmp(arg[i],"&")==0||strcmp(arg[i],"&&")
+        ==0)
             return i;
-        else
-            continue;
     }
     return 0;
 }
@@ -163,10 +162,14 @@ int handleMulti(char **arg)
     int c =0;//a counter for the current command
     for (int i = 0; i <arguments; i++)
     {
-        if (strcmp(arg[i],";")==0|strcmp(arg[i],"&")==0)
+        if (strcmp(arg[i],";")==0||strcmp(arg[i],"&")==0||strcmp(arg[i],"&&")
+        ==0)
         {
+            //set flags for background job
             if (strcmp(arg[i],"&")==0)
                 background = 1;
+            if (strcmp(arg[i],"&&")==0)
+                check = 1 ;//set the flag to check status
             runCommand(temp);//executes the current command
             c = 0;//reset counter
             free(temp);
@@ -178,6 +181,8 @@ int handleMulti(char **arg)
     }
     runCommand(temp);//here the last command from the input is executed
     free(temp);//release memory
+    free(cmd1);
+    free(cmd2);
     background = 0;
     return 0;
 }
@@ -221,6 +226,9 @@ int runCommand(char **cmd)
     }
     else if (pid == 0) //child successfully created
     {
+        //if && is present and the previous cmd didn't end with status 0
+        if (check == 1&&status!=0)
+            return 0;
         execvp(cmd[0],cmd);
         //print error msg if gets here
         //printf( "Something went wrong\n");
@@ -232,8 +240,8 @@ int runCommand(char **cmd)
            //not waiting for process to quit
         }
         else
-            waitpid(pid, &status, 0);
+            waitpid(pid, &status, WUNTRACED);
     }
-    background = 0; // reset
+    background = 0; // reset the flag
     return 0;
 }
